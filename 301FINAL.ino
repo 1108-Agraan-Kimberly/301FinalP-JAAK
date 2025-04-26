@@ -6,9 +6,9 @@
 #define RDA 0x80
 #define TBE 0x20
 
-#define START_BUTTON 5
+#define START_BUTTON 7
 #define STOP_BUTTON 6
-#define RESET_BUTTON 7
+#define RESET_BUTTON 5
 #define STEP_BUTTON 4
 
 #define DISABLED 1
@@ -34,6 +34,9 @@ volatile unsigned char* port_b = (unsigned char*) 0x25;
 volatile unsigned char* ddr_b = (unsigned char*) 0x24; 
 volatile unsigned char* pin_b = (unsigned char*) 0x23; 
 
+// global variables
+int status = DISABLED;
+
 void setup()
 {
   // set PB4, PB5, PB6, PB7 to INPUT
@@ -54,8 +57,6 @@ void setup()
 
 void loop()
 {
-  int status = DISABLED;
-
   // start button
   if(*pin_b & (1 << START_BUTTON) && status == DISABLED)
   {
@@ -83,7 +84,7 @@ void loop()
       // TURN LED ON
       if(checkWaterStatus(status))
       {
-
+        // Check temps + other stuff
       }
       break;
     // running = blue LED
@@ -91,7 +92,7 @@ void loop()
       // TURN LED ON
       if(checkWaterStatus(status))
       {
-
+        // Check temps + other stuff
       }
       break;
     // error = red LED
@@ -105,6 +106,7 @@ void loop()
   }
 }
 
+// Check water value and return status
 bool checkWaterStatus(int& status)
 {
   int waterValue = adc_read(0);
