@@ -2,6 +2,7 @@
 // Project: CPE 301 Final Project
 
 #include <LiquidCrystal.h>
+#include <RTClib.h>
 
 #define RDA 0x80
 #define TBE 0x20
@@ -36,6 +37,7 @@ volatile unsigned char* pin_b = (unsigned char*) 0x23;
 
 // global variables
 int status = DISABLED;
+RTC_DS3231 rtc;
 
 void setup()
 {
@@ -51,12 +53,17 @@ void setup()
   *ddr_b |= (1 << STEP_BUTTON);
   // initialize UART
   U0Init(9600);
+  //starts rtc 
+  rtc.begin();
   // initialize ADC
   adc_init();
 }
 
 void loop()
 {
+  DateTime now = rtc.now(); 
+  printTime(now.hour(), now.minute(), now.second()); //call the rtc time
+  delay(3000); //need to change to millis()
   // start button
   if(*pin_b & (1 << START_BUTTON) && status == DISABLED)
   {
@@ -104,6 +111,20 @@ void loop()
       U0putchar('\n');
       break;
   }
+}
+
+//prints string
+void U0printString(const char* str) {
+  while (*str) {
+    U0putChar(*str++);
+  }
+}
+
+//neeed to change registers but its the formatting of how it should be printed
+void printTime(uint8_t h, uint8_t m, uint8_t s) {
+  char buffer[16];
+  sprintf(buffer, "%02d:%02d:%02d\r\n", h, m, s);
+  U0printString(buffer);
 }
 
 // Check water value and return status
