@@ -3,19 +3,26 @@
 
 #include <LiquidCrystal.h>
 #include <RTClib.h>
+#include <dht.h>
+#include <Stepper.h>
+
+#define DHT11_PIN 7
+dht DHT;
 
 #define RDA 0x80
 #define TBE 0x20
 
-#define START_BUTTON 7
-#define STOP_BUTTON 6
-#define RESET_BUTTON 5
+#define START_BUTTON 3
+#define STOP_BUTTON 5 
+#define RESET_BUTTON 6
 #define STEP_BUTTON 4
 
 #define DISABLED 1
 #define IDLE 2
 #define RUNNING 3
 #define ERROR 4
+
+LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
 
 // UART Pointers
 volatile unsigned char* myUCSR0A = (unsigned char*) 0x00C0;
@@ -35,25 +42,36 @@ volatile unsigned char* port_b = (unsigned char*) 0x25;
 volatile unsigned char* ddr_b = (unsigned char*) 0x24; 
 volatile unsigned char* pin_b = (unsigned char*) 0x23; 
 
+// Port H Register Pointers
+volatile unsigned char* port_h = (unsigned char*) 0x102; 
+volatile unsigned char* ddr_h = (unsigned char*) 0x101; 
+volatile unsigned char* pin_h = (unsigned char*) 0x100; 
+
 // global variables
 int status = DISABLED;
+int step = 0;
 RTC_DS3231 rtc;
+unsigned long previousMillis = 0; 
+const long interval = 3000;  
+
+const int stepsPerRevolution = 2038; //motor
+Stepper myStepper = Stepper(stepsPerRevolution, 40, 42, 41, 43); //motor pins
 
 void setup()
 {
-  // set PB4, PB5, PB6, PB7 to INPUT
-  *port_b &= ~(1 << START_BUTTON);
-  *port_b &= ~(1 << STOP_BUTTON);
-  *port_b &= ~(1 << RESET_BUTTON);
+  // set PH3, PH5, PH6, PB4 to INPUT
+  *port_h &= ~(1 << START_BUTTON);
+  *port_h &= ~(1 << STOP_BUTTON);
+  *port_h &= ~(1 << RESET_BUTTON);
   *port_b &= ~(1 << STEP_BUTTON);
   // enable the pull-ups on buttons
-  *ddr_b |= (1 << START_BUTTON);
-  *ddr_b |= (1 << STOP_BUTTON);
-  *ddr_b |= (1 << RESET_BUTTON);
+  *ddr_h |= (1 << START_BUTTON);
+  *ddr_h |= (1 << STOP_BUTTON);
+  *ddr_h |= (1 << RESET_BUTTON);
   *ddr_b |= (1 << STEP_BUTTON);
   // initialize UART
   U0Init(9600);
-  //starts rtc 
+  // starts rtc 
   rtc.begin();
   // initialize ADC
   adc_init();
@@ -61,23 +79,46 @@ void setup()
 
 void loop()
 {
-  DateTime now = rtc.now(); 
-  printTime(now.hour(), now.minute(), now.second()); //call the rtc time
-  delay(3000); //need to change to millis()
+  unsigned long currentMillis = millis();
+
+  //updates the time every 3 seconds
+  if(currentMillis - previousMillis >= interval)
+  {
+    previousMillis = currentMillis;
+    DateTime now = rtc.now(); 
+    printTime(now.hour(), now.minute(), now.second()); //shows time
+    printNumber(status);  //needs to print status
+    putChar('\n');
+  }
+
   // start button
-  if(*pin_b & (1 << START_BUTTON) && status == DISABLED)
+  if(*pin_h & (1 << START_BUTTON) && status == DISABLED)
   {
     status = IDLE;
   }
   // stop button
-  if(*pin_b & (1 << STOP_BUTTON)) 
+  if(*pin_h & (1 << STOP_BUTTON)) 
   {
     status = DISABLED;
   }
   // reset button
-  if(*pin_b & (1 << RESET_BUTTON) && status == ERROR)
+  if(*pin_h & (1 << RESET_BUTTON) && status == ERROR)
   {
     status = IDLE;
+  }
+  // step button
+  if(*pin_b & (1 << STEP_BUTTON) && status != DISABLED)
+  {
+    step = (step + 1) % 3;
+    myStepper.setSpeed(step * 5);
+    if(step == 1)
+    {
+      myStepper.step(stepsPerRevolution);
+    }
+    else
+    {
+      myStepper.step(-stepsPerRevolution);
+    }
   }
 
   switch(status)
@@ -91,7 +132,18 @@ void loop()
       // TURN LED ON
       if(checkWaterStatus(status))
       {
-        // Check temps + other stuff
+        if(DHT.temperature < 30)
+        {
+          if (currentMillis - previousMillis >= interval) 
+          {
+            previousMillis = currentMillis;// save the time of this update
+            displayDHTData(); // update the LCD
+          }
+        }
+        else
+        {
+          status = RUNNING;
+        }
       }
       break;
     // running = blue LED
@@ -99,29 +151,47 @@ void loop()
       // TURN LED ON
       if(checkWaterStatus(status))
       {
-        // Check temps + other stuff
+        if(DHT.temperature >= 30)
+        {
+          if(currentMillis - previousMillis >= interval) 
+          {
+            previousMillis = currentMillis;// save the time of this update
+            displayDHTData(); // update the LCD
+          }
+        }
+        else
+        {
+          status = ERROR;
+        }
       }
       break;
     // error = red LED
     case(ERROR):
       // TURN LED ON
       char message[] = "Water level is too low";
+      lcd.print("ERROR");
       for(int i = 0; message[i] != '\0'; i++)
-        U0putchar(message[i]);
-      U0putchar('\n');
+      {
+        putChar(message[i]);
+        putChar('\n');  
+      }
+      
       break;
   }
 }
 
 //prints string
-void U0printString(const char* str) {
-  while (*str) {
-    U0putChar(*str++);
+void U0printString(const char* str) 
+{
+  while (*str) 
+  {
+    putChar(*str++);
   }
 }
 
 //neeed to change registers but its the formatting of how it should be printed
-void printTime(uint8_t h, uint8_t m, uint8_t s) {
+void printTime(uint8_t h, uint8_t m, uint8_t s) 
+{
   char buffer[16];
   sprintf(buffer, "%02d:%02d:%02d\r\n", h, m, s);
   U0printString(buffer);
@@ -193,4 +263,50 @@ unsigned int adc_read(unsigned char adc_channel_num)
   while(*my_ADCSRA & 0x40);
   unsigned int val = (*my_ADC_DATA & 0x03FF);
   return val;
+}
+
+//
+void printNumber(int number) 
+{
+  // Convert the number to a string manually
+  char buffer[10];         // Enough to hold a 32-bit integer
+  int i = 0;
+
+  if (number == 0) {
+    putChar('0');
+    return;
+  }
+
+  if (number < 0) {
+    putChar('-');
+    number = -number;
+  }
+
+  // Extract digits (in reverse order)
+  while (number > 0) {
+    buffer[i++] = '0' + (number % 10);
+    number /= 10;
+  }
+
+  // Print digits in correct order
+  for (int j = i - 1; j >= 0; j--) {
+    putChar(buffer[j]);
+  }
+}
+
+//Temp and humidity for LCD screen
+void displayDHTData() 
+{
+  int chk = DHT.read11(DHT11_PIN);
+
+  lcd.setCursor(0, 0); 
+  lcd.print("Temp: ");
+  lcd.print(DHT.temperature);
+  lcd.print((char)223); // Degree symbol
+  lcd.print("C");
+
+  lcd.setCursor(0, 1);
+  lcd.print("Humidity: ");
+  lcd.print(DHT.humidity);
+  lcd.print("%");
 }
