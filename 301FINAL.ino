@@ -1,6 +1,6 @@
 // Names: Kimberly Agraan, Adrian Delibassis, Aidan Madonna, Joe Wu
 // Project: CPE 301 Final Project
-
+// All group memebrs worked under the same device in person equally. 
 #include <LiquidCrystal.h>
 #include <RTClib.h>
 #include <dht.h>
