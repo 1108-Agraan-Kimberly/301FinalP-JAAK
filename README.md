@@ -12,8 +12,8 @@ https://drive.google.com/drive/folders/1xf9lX4sYT3UEeZzeGde0xebWIoNEsbTk?usp=sha
 ## Description 
 ``
 
-	Our project will simulate the functions of a swamp cooler. It will cool dry air by blowing it through water-saturated material, increasing humidity and decreasing temperature. The components that will be used include sensors to measure the temperature and humidity. A water level sensor will be used for detecting the water reservoir to check if it is wet or not. The temperature and humidity will be displayed on an LCD, it will update and show the changes. A fan 3-6v Motor will be used to help cool down the water while the stepper motor will simulate a vent that will change airflow/water flow. 
- 
+Our project will simulate the functions of a swamp cooler. It will cool dry air by blowing it through water-saturated material, increasing humidity and decreasing temperature. The components that will be used include sensors to measure the temperature and humidity. A water level sensor will be used for detecting the water reservoir to check if it is wet or not. The temperature and humidity will be displayed on an LCD, it will update and show the changes. A fan 3-6v Motor will be used to help cool down the water while the stepper motor will simulate a vent that will change airflow/water flow. 
+
  ``
 
 ## Program
