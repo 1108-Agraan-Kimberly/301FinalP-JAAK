@@ -32,13 +32,21 @@ The program supports the functionalities of how the system will behave. There ar
 ## Components
 
 Each of the components is connected to different pins to be able to read with the Arduino. Each different component has a different purpose to be on the board.
+
 The least intuitive part is the fan motor, negative side to ground and the positive side to pin 30. This fan is to push air and keep cool.
+
 The real-time clock has two output ports, SDA and SCL, connected to 20 and 21, respectively. The real time clock is to keep track of the time and output on the serial monitor when it changes states.
+
 The humidity sensor is connected to pin 38. This sensor reads temperature and humidity, these are shown on the LCD screen. The temperature is also used to determine what state the circuit will go into either on or fan to cool.
+
 The stepper motor control has 1N1-7, but it's only necessary to use 1N1-4, 1 to 40, 2 to 41, 3 to 42, and 4 to 43. The stepper motor connects straight into the control module and is used to ‘open’ and ‘close’ the vent for cooling air. 
+
 The water sensor is connected to pin A0. This tells the circuit to go into error status or to continue whatever is going on. If the sensor drops below about half the red LED will turn on and stop everything else going on.
+
 The LCD screen has VSS to a potentiometer output. This potentiometer gets power from the 5V and then outputs to V0 as well. VDD to power. RS to 11. RW to GND. E to 11. D4 to 2. D5 to 3. D6 to 4. D7 to 5. A goes to a 330 resistor and power. K goes to GND. The LCD screen shows temperature and himidity and when the water sensor is too low then the LCD will show “Water level too low.”
+
 The four buttons on the breadboard have specific tasks to them each. The first button on the left connects to pin 18. This button is for turning on the circuit.  The second button connects to pin 8 and is for turning off the circuit to idle. The next is the reset button to pin 9. The last button is for the stepper motor connected to pin 10. This button is for spinning the stepper motor to open the ‘vent’.
+
 All of the LEDs have 330 resistors to the anode, and the cathode is connected to Arduino pins. The green LED shows the temperature under threshold and is connected to pin 53. The yellow LED shows when the circuit is idle and that is connected to pin 50. The blue LED shows when the fan is on and spinning to bring the temperature down. This is connected to the pin 51. The last LED red is to show when the water is below threshold and is the error status. This one is connected to pin 52.
 
 ## System Overview
