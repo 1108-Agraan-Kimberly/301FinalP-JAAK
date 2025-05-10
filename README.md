@@ -15,7 +15,10 @@ https://drive.google.com/drive/folders/1xf9lX4sYT3UEeZzeGde0xebWIoNEsbTk?usp=sha
 ## Program
 ``
 	The program supports the functionalities of how the system will behave. There are four different states the system will be in. The first state it starts in is disabled. This is where the system is off. The LCD won’t display anything and the fan is also off. The motor will not be able to adjust while it is disabled. To signify that it is in the disabled state a yellow LED will be turned on. Then pressing one of the buttons will change its state. 
-	The next state would be idle. The idle state will keep track of the temperature, humidity, water level, and the time. The water level is going to be continuously monitored and the stage will be changed if there’s an error in the water being too low in level. The LED at this state should be green signifying it is on.
-	Another state of the circuit is the error state. The motor shuts off and everything stops and stays in place. There needs to be a reset button to change to the idle state if the water is then above the threshold. Error message is displayed on the LCD and the light will be RED showing everything is in this stalled state.
-	The last state is running state. The fan motor is on and will run intil the temperature drops below the threshold. If the water becomes too low it will transition to the error state. The blue LED should be turned on when in this state.
+	
+ The next state would be idle. The idle state will keep track of the temperature, humidity, water level, and the time. The water level is going to be continuously monitored and the stage will be changed if there’s an error in the water being too low in level. The LED at this state should be green signifying it is on.
+	
+ Another state of the circuit is the error state. The motor shuts off and everything stops and stays in place. There needs to be a reset button to change to the idle state if the water is then above the threshold. Error message is displayed on the LCD and the light will be RED showing everything is in this stalled state.
+	
+ The last state is running state. The fan motor is on and will run intil the temperature drops below the threshold. If the water becomes too low it will transition to the error state. The blue LED should be turned on when in this state.
 ``
