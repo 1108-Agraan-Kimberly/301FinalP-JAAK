@@ -6,25 +6,9 @@
 #include <dht.h>
 #include <Stepper.h>
 
-#define DHT11_PIN 7
-dht DHT;
-
+// UART Pointers
 #define RDA 0x80
 #define TBE 0x20
-
-#define START_BUTTON 3
-#define STOP_BUTTON 5 
-#define RESET_BUTTON 6
-#define STEP_BUTTON 4
-
-#define DISABLED 1
-#define IDLE 2
-#define RUNNING 3
-#define ERROR 4
-
-LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
-
-// UART Pointers
 volatile unsigned char* myUCSR0A = (unsigned char*) 0x00C0;
 volatile unsigned char* myUCSR0B = (unsigned char*) 0x00C1;
 volatile unsigned char* myUCSR0C = (unsigned char*) 0x00C2;
@@ -37,178 +21,296 @@ volatile unsigned char* my_ADCSRB = (unsigned char*) 0x7B;
 volatile unsigned char* my_ADCSRA = (unsigned char*) 0x7A;
 volatile unsigned int* my_ADC_DATA = (unsigned int*) 0x78;
 
+// Port A Register Pointers
+volatile unsigned char* port_a = (unsigned char*) 0x22;
+volatile unsigned char* ddr_a = (unsigned char*) 0x21;
+volatile unsigned char* pin_a = (unsigned char*) 0x20;
+
 // Port B Register Pointers
 volatile unsigned char* port_b = (unsigned char*) 0x25; 
 volatile unsigned char* ddr_b = (unsigned char*) 0x24; 
-volatile unsigned char* pin_b = (unsigned char*) 0x23; 
+volatile unsigned char* pin_b = (unsigned char*) 0x23;
+
+// Port C Register Pointers
+volatile unsigned char* port_c = (unsigned char*) 0x28;
+volatile unsigned char* ddr_c = (unsigned char*) 0x27;
+volatile unsigned char* pin_c = (unsigned char*) 0x26;
+
+// Port D Register Pointers
+volatile unsigned char* port_d = (unsigned char*) 0x2B;
+volatile unsigned char* ddr_d = (unsigned char*) 0x2A;
+volatile unsigned char* pin_d = (unsigned char*) 0x29;
+
+// Port E Register Pointers
+volatile unsigned char* port_e = (unsigned char*) 0x2E;
+volatile unsigned char* ddr_e = (unsigned char*) 0x2D;
+volatile unsigned char* pin_e = (unsigned char*) 0x2C;
+
+// Port F Register Pointers
+volatile unsigned char* port_f = (unsigned char*) 0x31;
+volatile unsigned char* ddr_f = (unsigned char*) 0x30;
+volatile unsigned char* pin_f = (unsigned char*) 0x2F;
 
 // Port H Register Pointers
 volatile unsigned char* port_h = (unsigned char*) 0x102; 
 volatile unsigned char* ddr_h = (unsigned char*) 0x101; 
-volatile unsigned char* pin_h = (unsigned char*) 0x100; 
+volatile unsigned char* pin_h = (unsigned char*) 0x100;
 
-// global variables
-int status = DISABLED;
-int step = 0;
+// Timer Pointers
+volatile unsigned char* myTCCR1A = (unsigned char *) 0x80;
+volatile unsigned char* myTCCR1B = (unsigned char *) 0x81;
+volatile unsigned char* myTCCR1C = (unsigned char *) 0x82;
+volatile unsigned char* myTIMSK1 = (unsigned char *) 0x6F;
+volatile unsigned char* myTIFR1 = (unsigned char *) 0x36;
+volatile unsigned int* myTCNT1 = (unsigned int *) 0x84;
+
+// Fan Pin
+#define FAN_PIN 7
+// DHT Pin
+dht DHT;
+#define DHT11_PIN 38
+// Button Pins
+#define START_BUTTON 3
+#define STOP_BUTTON 5 
+#define RESET_BUTTON 6
+#define STEP_BUTTON 4
+// LED Pins
+#define YELLOW_LED 3
+#define GREEN_LED 0
+#define BLUE_LED 2
+#define RED_LED 1
+
+// LCD Pins
+LiquidCrystal lcd(11, 12, 2, 3, 4, 5);
+// Stepper Motor Pins
+Stepper myStepper(60, 40, 42, 41, 43);
+
+// Water Sensor 
+int waterSensorPin = A0;
+#define WATER_THRESHOLD 300
+#define TEMP_THRESHOLD 27
+
+enum State {DISABLED, IDLE, RUNNING, ERROR, LEFT, RIGHT};
+
+// Global Variables
+State currState = DISABLED;
+State prevState = DISABLED;
+State stepState = DISABLED;
+bool hasEnabled = false;
 RTC_DS3231 rtc;
-unsigned long previousMillis = 0; 
-const long interval = 3000;  
 
-const int stepsPerRevolution = 2038; //motor
-Stepper myStepper = Stepper(stepsPerRevolution, 40, 42, 41, 43); //motor pins
+unsigned long previousMillis = 0;
+const long interval = 6000;
+unsigned long time = 0;
 
 void setup()
 {
-  // set PH3, PH5, PH6, PB4 to INPUT
-  *port_h &= ~(1 << START_BUTTON);
-  *port_h &= ~(1 << STOP_BUTTON);
-  *port_h &= ~(1 << RESET_BUTTON);
-  *port_b &= ~(1 << STEP_BUTTON);
-  // enable the pull-ups on buttons
-  *ddr_h |= (1 << START_BUTTON);
-  *ddr_h |= (1 << STOP_BUTTON);
-  *ddr_h |= (1 << RESET_BUTTON);
-  *ddr_b |= (1 << STEP_BUTTON);
-  // initialize UART
+  // Set Buttons to INPUT
+  *ddr_d &= ~(0x01 << START_BUTTON);
+  *ddr_h &= ~(0x01 << STOP_BUTTON);
+  *ddr_h &= ~(0x01 << RESET_BUTTON);
+  *ddr_b &= ~(0x01 << STEP_BUTTON);
+  // Enable Pull-Up Resistors
+  *port_d |= (0x01 << START_BUTTON);
+  *port_h |= (0x01 << STOP_BUTTON);
+  *port_h |= (0x01 << RESET_BUTTON);
+  *port_b |= (0x01 << STEP_BUTTON);
+  // Set LEDs to OUTPUT
+  *ddr_b |= (0x01 << YELLOW_LED);
+  *ddr_b |= (0x01 << GREEN_LED);
+  *ddr_b |= (0x01 << BLUE_LED);
+  *ddr_b |= (0x01 << RED_LED);
+  // Setup Water Sensor Ports
+  *ddr_f &= ~(0x01 << 0);
+  // Setup Fan Ports
+  *ddr_c |= (0x01 << FAN_PIN);
+  *port_c &= ~(0x01 << FAN_PIN); 
+
+  // Initialize UART
   U0Init(9600);
-  // starts rtc 
+  // Initialize rtc
+  setup_timer_regs();
   rtc.begin();
-  // initialize ADC
+  // DateTime now = DateTime(2025, 5, 9, 15, 49, 0);
+  // rtc.adjust(now);
+  // Initialize LCD
+  lcd.begin(16, 2);
+  lcd.setCursor(0, 0);
+  // Setup Stepper
+  myStepper.setSpeed(60);
+  // Initialize ADC
   adc_init();
+
+  // Setup Interupt
+  attachInterrupt(digitalPinToInterrupt(18), startSystem, HIGH);
 }
 
 void loop()
 {
-  unsigned long currentMillis = millis();
+  // Measure values
+  unsigned int waterValue = adc_read(waterSensorPin);
+  int chk = DHT.read11(DHT11_PIN);
+  int temperature = DHT.temperature;
+  int humidity = DHT.humidity;
 
-  //updates the time every 3 seconds
-  if(currentMillis - previousMillis >= interval)
-  {
-    previousMillis = currentMillis;
-    DateTime now = rtc.now(); 
-    printTime(now.hour(), now.minute(), now.second()); //shows time
-    printNumber(status);  //needs to print status
-    putChar('\n');
-  }
-
-  // start button
-  if(*pin_h & (1 << START_BUTTON) && status == DISABLED)
-  {
-    status = IDLE;
-  }
   // stop button
-  if(*pin_h & (1 << STOP_BUTTON)) 
+  if(!(*pin_h & (0x01 << STOP_BUTTON)) )
   {
-    status = DISABLED;
-  }
-  // reset button
-  if(*pin_h & (1 << RESET_BUTTON) && status == ERROR)
-  {
-    status = IDLE;
-  }
-  // step button
-  if(*pin_b & (1 << STEP_BUTTON) && status != DISABLED)
-  {
-    step = (step + 1) % 3;
-    myStepper.setSpeed(step * 5);
-    if(step == 1)
-    {
-      myStepper.step(stepsPerRevolution);
-    }
-    else
-    {
-      myStepper.step(-stepsPerRevolution);
-    }
+    hasEnabled = false;
   }
 
-  switch(status)
+  switch(currState)
   {
     // disabled = yellow LED
-    case(DISABLED):
-      // TURN LED ON
+    case DISABLED:
+      disabled();
       break;
-    // idle = green LED
-    case(IDLE):
-      // TURN LED ON
-      if(checkWaterStatus(status))
-      {
-        if(DHT.temperature < 30)
-        {
-          if (currentMillis - previousMillis >= interval) 
-          {
-            previousMillis = currentMillis;// save the time of this update
-            displayDHTData(); // update the LCD
-          }
-        }
-        else
-        {
-          status = RUNNING;
-        }
-      }
+    // idle = green LED    
+    case IDLE:
+      idle(waterValue, temperature);
       break;
     // running = blue LED
-    case(RUNNING):
-      // TURN LED ON
-      if(checkWaterStatus(status))
-      {
-        if(DHT.temperature >= 30)
-        {
-          if(currentMillis - previousMillis >= interval) 
-          {
-            previousMillis = currentMillis;// save the time of this update
-            displayDHTData(); // update the LCD
-          }
-        }
-        else
-        {
-          status = ERROR;
-        }
-      }
+    case RUNNING:
+      running(waterValue, temperature);
       break;
     // error = red LED
-    case(ERROR):
-      // TURN LED ON
-      char message[] = "Water level is too low";
-      lcd.print("ERROR");
-      for(int i = 0; message[i] != '\0'; i++)
-      {
-        putChar(message[i]);
-        putChar('\n');  
-      }
-      
+    case ERROR:
+      error(waterValue);
       break;
   }
+  
+  // Disaplay to LCD
+  if(currState != DISABLED)
+  {
+    displayDHTData();
+    stepperMotor();
+  }
+  printTime();
+
+  time = millis();
+  while(millis() < time + 500);
 }
 
-//prints string
-void U0printString(const char* str) 
+// Disabled state
+void disabled()
 {
-  while (*str) 
+  // Turn yellow LED on
+  *port_b |= (0x01 << YELLOW_LED);
+  *port_b &= ~(0x01 << GREEN_LED);
+  *port_b &= ~(0x01 << BLUE_LED);
+  *port_b &= ~(0x01 << RED_LED);
+  // Turn fan off
+  *port_c &= ~(0x01 << FAN_PIN);
+  lcd.clear();
+  if(prevState != DISABLED)
   {
-    putChar(*str++);
+    statusSwapped();
+    prevState = DISABLED;
+  }
+  if(hasEnabled)
+  {
+    currState = IDLE;
+    prevState = DISABLED;
   }
 }
 
-//neeed to change registers but its the formatting of how it should be printed
-void printTime(uint8_t h, uint8_t m, uint8_t s) 
+// Idled state
+void idle(int w, int t)
 {
-  char buffer[16];
-  sprintf(buffer, "%02d:%02d:%02d\r\n", h, m, s);
-  U0printString(buffer);
+  // Turn green LED on
+  *port_b &= ~(0x01 << YELLOW_LED);
+  *port_b |= (0x01 << GREEN_LED);
+  *port_b &= ~(0x01 << BLUE_LED);
+  *port_b &= ~(0x01 << RED_LED);
+  // Turn fan off
+  *port_c &= ~(0x01 << FAN_PIN); 
+
+  if(prevState != IDLE)
+  {
+    statusSwapped();    
+    prevState = IDLE;
+  }
+  if(!hasEnabled)
+  {
+    currState = DISABLED;
+    prevState = IDLE;
+  }
+  else if(w < WATER_THRESHOLD)
+  {
+    currState = ERROR;
+    prevState = IDLE;
+  }
+  else if(t >= TEMP_THRESHOLD)
+  {
+    currState = RUNNING;
+    prevState = IDLE;
+  }
 }
 
-// Check water value and return status
-bool checkWaterStatus(int& status)
+void running(int w, int t)
 {
-  int waterValue = adc_read(0);
-  if(waterValue > 220)  // threshold subject to change
+  // Turn blue LED on
+  *port_b &= ~(0x01 << YELLOW_LED);
+  *port_b &= ~(0x01 << GREEN_LED);
+  *port_b |= (0x01 << BLUE_LED);
+  *port_b &= ~(0x01 << RED_LED);
+  // Turn fan on
+  *port_c |= (0x01 << FAN_PIN);
+
+  if(prevState != RUNNING)
   {
-    return true;
+   statusSwapped();
+   prevState = RUNNING;
   }
-  else if(waterValue <= 220)  // threshold subject to change
+  if(!hasEnabled)
   {
-    status = ERROR;
-    return false;
+    currState = DISABLED;
+    prevState = RUNNING;
+  }
+  else if(w < WATER_THRESHOLD)
+  {
+    currState = ERROR;
+    prevState = RUNNING;
+  }
+  else if(t < TEMP_THRESHOLD)
+  {
+    currState = IDLE;
+    prevState = RUNNING;
+  }
+}
+void error(int w)
+{
+  // Turn red LED on
+  *port_b &= ~(0x01 << YELLOW_LED);
+  *port_b &= ~(0x01 << GREEN_LED);
+  *port_b &= ~(0x01 << BLUE_LED);
+  *port_b |= (0x01 << RED_LED);
+  // Turn fan off
+  *port_c &= ~(0x01 << FAN_PIN);
+
+  time = millis();
+  while(millis() < time + 500); 
+
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Water level is");
+  lcd.setCursor(0, 1);
+  lcd.print("too low");
+
+  if(prevState != RUNNING)
+  {
+    statusSwapped();
+    prevState = RUNNING;
+  }
+  if(!hasEnabled)
+  {
+    currState = DISABLED;
+    prevState = ERROR;
+  }
+  else if(!(*pin_h & (0x01 << RESET_BUTTON)) && w >= WATER_THRESHOLD)
+  {
+    currState = IDLE;
+    prevState = ERROR;
   }
 }
 
@@ -265,38 +367,32 @@ unsigned int adc_read(unsigned char adc_channel_num)
   return val;
 }
 
-//
-void printNumber(int number) 
+// Timer Setup
+void setup_timer_regs()
 {
-  // Convert the number to a string manually
-  char buffer[10];         // Enough to hold a 32-bit integer
-  int i = 0;
+  // setup the timer control registers  
+  *myTCCR1A = 0x00;
+  *myTCCR1B = 0X00;
+  *myTCCR1C = 0x00;
+  // reset TOV flag and enable TOV interrupt
+  *myTIFR1 |= 0x01;
+  *myTIMSK1 |= 0x01;  
+}
 
-  if (number == 0) {
-    putChar('0');
-    return;
-  }
-
-  if (number < 0) {
-    putChar('-');
-    number = -number;
-  }
-
-  // Extract digits (in reverse order)
-  while (number > 0) {
-    buffer[i++] = '0' + (number % 10);
-    number /= 10;
-  }
-
-  // Print digits in correct order
-  for (int j = i - 1; j >= 0; j--) {
-    putChar(buffer[j]);
+// Interrupt Function
+void startSystem()
+{
+  if(*pin_d & (0x01 << START_BUTTON))
+  {
+    hasEnabled = true;
   }
 }
 
-//Temp and humidity for LCD screen
+// Temp and humidity for LCD screen
 void displayDHTData() 
 {
+  time = millis();
+  while(millis() < time + 500); 
   int chk = DHT.read11(DHT11_PIN);
 
   lcd.setCursor(0, 0); 
@@ -309,4 +405,68 @@ void displayDHTData()
   lcd.print("Humidity: ");
   lcd.print(DHT.humidity);
   lcd.print("%");
+}
+
+// Print time to Serial Monitor
+void printTime()
+{
+  unsigned long currentMillis = millis();
+
+  //updates the time every 3 seconds
+  if(currentMillis - previousMillis >= interval)
+  {
+    previousMillis = currentMillis;
+    DateTime now = rtc.now(); 
+    
+    char buffer[16];
+    sprintf(buffer, "%02d:%02d:%02d\r\n", now.hour(), now.minute(), now.second());
+    U0printString(buffer); 
+    putChar('\n');
+  }
+}
+
+//prints string
+void U0printString(const char* str) 
+{
+  while (*str) 
+  {
+    putChar(*str++);
+  }
+}
+
+void stepperMotor()
+{
+  if(!(*pin_b & (0x01 << STEP_BUTTON)))
+  {
+    if(stepState == DISABLED)
+    {
+      stepState = LEFT;
+      myStepper.setSpeed(25);
+      myStepper.step(100);
+      
+    }    
+    else if(stepState == LEFT)
+    {
+      stepState = RIGHT;
+      myStepper.setSpeed(50);
+      myStepper.step(-100);
+      
+    }    
+    else
+    {
+      stepState = DISABLED;
+      myStepper.setSpeed(0);
+      
+    }
+  }
+}
+
+void statusSwapped()
+{
+  char message[] = "Status changed";
+  for(int i = 0; message[i] != '\0'; i++)
+  {
+    putChar(message[i]);
+  }
+  putChar('\n');
 }
