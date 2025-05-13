@@ -1,5 +1,5 @@
 # 301FinalP-JAAK
-Group Members: Kimberly Agraan, Adrian Delibassis, Aidan Modonna, Joe Wu
+Group Members: Kimberly Agraan, Adrian Delibassis, Aidan Madonna, Joe Wu
 
 ## Demonstrationm Video
 ``
