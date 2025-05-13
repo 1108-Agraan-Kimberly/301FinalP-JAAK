@@ -6,6 +6,9 @@ Group Members: Kimberly Agraan, Adrian Delibassis, Aidan Modonna, Joe Wu
 
 https://drive.google.com/drive/folders/1xf9lX4sYT3UEeZzeGde0xebWIoNEsbTk?usp=sharing
 
+Because previous link might not work here should be another link: 
+https://drive.google.com/drive/folders/1grzUIBh22ErJ8p9O7Je9GVcg3sDXqCwe?usp=sharing
+
 ``
 
 # Overview:
